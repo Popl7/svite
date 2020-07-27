@@ -215,7 +215,7 @@ async function installTemplate(options) {
   const degit = require('degit');
   const githubRepo = pkg.repository.url.match(/github\.com\/(.*).git/)[1];
   const beta = pkg.version.indexOf('beta') > -1;
-  const degitPath = `${githubRepo}/examples/${template}${beta ? '#beta' : ''}`;
+  const degitPath = `${githubRepo}/examples/${template}${beta ? '#beta' : '#add-typescript'}`;
   const degitOptions = {
     cache: options.cache,
     force: options.force,
@@ -240,6 +240,12 @@ async function installTemplate(options) {
   await emitter.clone(targetDir);
   log.info(`created ${targetDir}`);
   await updatePkg(targetDir);
+
+  if (options.typescript) {
+    options.targetDir = options.targetDir || `svite-${template}`;
+    await convertToTypeScript(options);
+  }
+
   if (!options.skipInstall) {
     await npmInstall(targetDir);
   }
@@ -258,6 +264,46 @@ async function updatePkg(dir) {
   pkg.name = path.basename(dir);
   pkg.devDependencies.svite = `^${version}`;
   fs.writeFileSync(pkgFile, JSON.stringify(pkg, null, 2));
+}
+
+async function convertToTypeScript(options) {
+  const targetDir = path.join(process.cwd(), options.targetDir || '');
+  const scriptDir = path.join(targetDir, 'scripts');
+
+  const degit = require('degit');
+  const githubRepo = pkg.repository.url.match(/github\.com\/(.*).git/)[1];
+  const beta = pkg.version.indexOf('beta') > -1;
+  const degitPath = `${githubRepo}/scripts${beta ? '#beta' : '#add-typescript'}`;
+  const degitOptions = {
+    cache: options.cache,
+    force: options.force,
+    verbose: options.debug,
+    mode: 'tar',
+  };
+  if (options.debug) {
+    log.debug(`degit ${degitPath}`, degitOptions);
+  }
+  const emitter = degit(degitPath, degitOptions);
+
+  emitter.on('info', (info) => {
+    log.info(info.message);
+  });
+  emitter.on('warn', (warning) => {
+    log.warn(warning.message);
+  });
+  emitter.on('error', (error) => {
+    log.error(error.message, error);
+  });
+
+  await emitter.clone(scriptDir);
+  log.info(`created ${scriptDir}`);
+
+  const typeScriptPath = path.join(scriptDir, 'setupTypeScript.js');
+  let typeScript = fs.readFileSync(typeScriptPath, 'utf8');
+  // appIndex = appIndex.replace('src="/src/index.js"', 'src="/src/index.ts"')
+  // fs.writeFileSync(appIndexPath, appIndex)
+
+  log.info('Added typescript', typeScript);
 }
 
 async function npmInstall(dir) {
@@ -393,8 +439,19 @@ async function main() {
     });
 
   program
+    .command('typescript [targetDir]')
+    .description('convert a new project to typescript')
+    .action(async (targetDir, cmd) => {
+      const options = cmd.opts();
+      setupDebug(options);
+      options.targetDir = targetDir;
+      await convertToTypeScript(options);
+    });
+
+  program
     .command('create [targetDir]')
     .description('create a new project. If you do not specify targetDir, "./svite-<template>" will be used')
+    .option('-ts, --typescript', 'add typescript support to project')
     .option('-t, --template [string]', `template for new project. ${JSON.stringify(templates)}`, 'minimal')
     .option('-f, --force', 'force operation even if targetDir exists and is not empty', false)
     .option('-c, --cache', 'cache template for later use', false)

@@ -21,7 +21,7 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dominikg/svite.git"
+    "url": "git+https://github.com/popl7/svite.git"
   },
   "keywords": [
     "vite",
